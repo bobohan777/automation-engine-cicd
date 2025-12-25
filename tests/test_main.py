@@ -2,8 +2,10 @@
 Unit tests for main application
 """
 
-import pytest
 import json
+
+import pytest
+
 from app.main import app
 
 

@@ -3,12 +3,14 @@ Automation Engine - Flask Application
 A simple web service demonstrating CI/CD pipeline integration
 """
 
-from flask import Flask, jsonify, request
-from datetime import datetime
-import os
 import logging
+import os
+from datetime import datetime
+
+from flask import Flask, jsonify, request
+
 from .config import Config
-from .utils import validate_input, format_response
+from .utils import format_response, validate_input
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

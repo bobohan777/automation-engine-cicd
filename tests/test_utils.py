@@ -2,9 +2,11 @@
 Unit tests for utility functions
 """
 
-import pytest
 from datetime import datetime, timedelta
-from app.utils import validate_input, format_response, sanitize_string, calculate_uptime
+
+import pytest
+
+from app.utils import calculate_uptime, format_response, sanitize_string, validate_input
 
 
 class TestValidateInput:

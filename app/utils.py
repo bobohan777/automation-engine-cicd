@@ -2,8 +2,8 @@
 Utility functions for Automation Engine
 """
 
-from typing import Any, Dict
 from datetime import datetime
+from typing import Any, Dict
 
 
 def validate_input(data: Any) -> bool:
