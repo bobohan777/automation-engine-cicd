@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # 🚀 The Automation Engine - CI/CD Pipeline Demo
 
 **"Prove you're a DevOps Engineer, not just a SysAdmin"**
