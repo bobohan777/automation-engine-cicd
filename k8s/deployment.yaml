@@ -10,8 +10,8 @@ metadata:
     managed-by: gitops
   annotations:
     deployment.kubernetes.io/revision: "1"
-    commit-sha: d88e4b4556fcbb1a5e4c27017b190dc8196e7bb0
-    build-number: "19"
+    commit-sha: 0276146a6dbcfc67f4f40da4a97d98ddca914151
+    build-number: "21"
 spec:
   replicas: 3
   strategy:
@@ -40,7 +40,7 @@ spec:
         fsGroup: 1001
       containers:
       - name: automation-engine
-        image: dennishan777/automation-engine:d88e4b4556fcbb1a5e4c27017b190dc8196e7bb0
+        image: dennishan777/automation-engine:0276146a6dbcfc67f4f40da4a97d98ddca914151
         imagePullPolicy: Always
         ports:
         - name: http
