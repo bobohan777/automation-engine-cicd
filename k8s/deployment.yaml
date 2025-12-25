@@ -40,7 +40,7 @@ spec:
         fsGroup: 1001
       containers:
       - name: automation-engine
-        image: YOUR_DOCKERHUB_USERNAME/automation-engine:latest
+        image: bobohan777/automation-engine:latest
         imagePullPolicy: Always
         ports:
         - name: http
