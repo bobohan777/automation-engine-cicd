@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: automation-engine-config
+  namespace: automation-engine
+  labels:
+    app: automation-engine
+data:
+  FLASK_ENV: "production"
+  LOG_LEVEL: "INFO"
+  APP_VERSION: "1.0.0"
+  PORT: "5000"
+  
+  # Application configuration
+  app.properties: |
+    app.name=Automation Engine
+    app.description=CI/CD Pipeline Demo Application
+    app.version=1.0.0
+    environment=production
+    
+  # Logging configuration
+  logging.conf: |
+    [loggers]
+    keys=root
+    
+    [handlers]
+    keys=consoleHandler
+    
+    [formatters]
+    keys=simpleFormatter
+    
+    [logger_root]
+    level=INFO
+    handlers=consoleHandler
+    
+    [handler_consoleHandler]
+    class=StreamHandler
+    level=INFO
+    formatter=simpleFormatter
+    args=(sys.stdout,)
+    
+    [formatter_simpleFormatter]
+    format=%(asctime)s - %(name)s - %(levelname)s - %(message)s

@@ -1,0 +1,200 @@
+name: 🔄 CI Pipeline
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  push:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: '3.11'
+  
+jobs:
+  code-quality:
+    name: 🔍 Code Quality
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout Code
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        
+    - name: 📦 Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: 🎨 Code Formatting Check
+      run: |
+        echo "::group::Black Formatting"
+        black --check --diff app/ tests/
+        echo "::endgroup::"
+        
+        echo "::group::Import Sorting"
+        isort --check-only --diff app/ tests/
+        echo "::endgroup::"
+        
+    - name: 🔍 Linting
+      run: |
+        echo "::group::Pylint Analysis"
+        pylint app/ --fail-under=8.0 --output-format=colorized
+        echo "::endgroup::"
+        
+        echo "::group::Flake8 Analysis"
+        flake8 app/ tests/ --max-line-length=88 --extend-ignore=E203,W503
+        echo "::endgroup::"
+        
+    - name: 🔒 Security Scan
+      run: |
+        echo "::group::Bandit Security Scan"
+        bandit -r app/ -f json -o bandit-report.json || true
+        bandit -r app/ --severity-level medium
+        echo "::endgroup::"
+        
+    - name: 📊 Upload Security Report
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: security-report
+        path: bandit-report.json
+
+  testing:
+    name: 🧪 Testing
+    runs-on: ubuntu-latest
+    needs: code-quality
+    
+    steps:
+    - name: 📥 Checkout Code
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        
+    - name: 📦 Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: 🧪 Run Unit Tests
+      run: |
+        echo "::group::Unit Tests with Coverage"
+        pytest tests/ -v --cov=app --cov-report=xml --cov-report=html --cov-report=term
+        echo "::endgroup::"
+        
+    - name: 📊 Coverage Report
+      run: |
+        echo "::group::Coverage Summary"
+        coverage report --fail-under=80
+        echo "::endgroup::"
+        
+    - name: 📈 Upload Coverage Reports
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage-report
+        path: |
+          coverage.xml
+          htmlcov/
+
+  docker-build:
+    name: 🐳 Docker Build
+    runs-on: ubuntu-latest
+    needs: testing
+    
+    steps:
+    - name: 📥 Checkout Code
+      uses: actions/checkout@v4
+      
+    - name: 🐳 Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: 🔨 Build Docker Image
+      run: |
+        echo "::group::Docker Build"
+        docker build -t automation-engine:${{ github.sha }} .
+        docker tag automation-engine:${{ github.sha }} automation-engine:latest
+        echo "::endgroup::"
+        
+    - name: 🧪 Test Docker Image
+      run: |
+        echo "::group::Container Test"
+        # Start container in background
+        docker run -d --name test-container -p 5000:5000 automation-engine:latest
+        
+        # Wait for container to start
+        sleep 10
+        
+        # Test health endpoint
+        curl -f http://localhost:5000/health || exit 1
+        
+        # Test main endpoint
+        curl -f http://localhost:5000/ || exit 1
+        
+        # Stop container
+        docker stop test-container
+        docker rm test-container
+        echo "::endgroup::"
+
+  security-scan:
+    name: 🔒 Security Scan
+    runs-on: ubuntu-latest
+    needs: docker-build
+    
+    steps:
+    - name: 📥 Checkout Code
+      uses: actions/checkout@v4
+      
+    - name: 🐳 Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: 🔨 Build Docker Image
+      run: |
+        docker build -t automation-engine:scan .
+        
+    - name: 🛡️ Run Trivy Vulnerability Scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'automation-engine:scan'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+        
+    - name: 🔍 Trivy Critical/High Check
+      run: |
+        echo "::group::Critical Vulnerability Check"
+        trivy image --exit-code 1 --severity HIGH,CRITICAL automation-engine:scan
+        echo "::endgroup::"
+        
+    - name: 📊 Upload Trivy Results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  pipeline-summary:
+    name: 📋 Pipeline Summary
+    runs-on: ubuntu-latest
+    needs: [code-quality, testing, docker-build, security-scan]
+    if: always()
+    
+    steps:
+    - name: 📊 Pipeline Results
+      run: |
+        echo "## 🎉 CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Code Quality | ${{ needs.code-quality.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Testing | ${{ needs.testing.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Docker Build | ${{ needs.docker-build.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Security Scan | ${{ needs.security-scan.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "**Branch:** \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY

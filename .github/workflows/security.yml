@@ -1,0 +1,102 @@
+name: 🔒 Security Scan
+
+on:
+  schedule:
+    - cron: '0 2 * * 1'  # Weekly on Monday at 2 AM
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  dependency-scan:
+    name: 🔍 Dependency Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout Code
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: 📦 Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install safety bandit
+        pip install -r requirements.txt
+        
+    - name: 🔒 Safety Check (Known Vulnerabilities)
+      run: |
+        echo "::group::Safety Vulnerability Check"
+        safety check --json --output safety-report.json || true
+        safety check
+        echo "::endgroup::"
+        
+    - name: 🛡️ Bandit Security Scan
+      run: |
+        echo "::group::Bandit Security Analysis"
+        bandit -r app/ -f json -o bandit-report.json || true
+        bandit -r app/ --severity-level medium
+        echo "::endgroup::"
+        
+    - name: 📊 Upload Security Reports
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: security-reports
+        path: |
+          safety-report.json
+          bandit-report.json
+
+  container-scan:
+    name: 🐳 Container Security
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout Code
+      uses: actions/checkout@v4
+      
+    - name: 🔨 Build Docker Image
+      run: |
+        docker build -t security-scan:latest .
+        
+    - name: 🛡️ Trivy Container Scan
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'security-scan:latest'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+        
+    - name: 🔍 Trivy Critical Check
+      run: |
+        echo "::group::Critical Vulnerability Assessment"
+        trivy image --exit-code 1 --severity HIGH,CRITICAL security-scan:latest
+        echo "::endgroup::"
+        
+    - name: 📊 Upload Trivy Results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  secrets-scan:
+    name: 🔐 Secrets Detection
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout Code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        
+    - name: 🔍 TruffleHog Secrets Scan
+      uses: trufflesecurity/trufflehog@main
+      with:
+        path: ./
+        base: main
+        head: HEAD
+        extra_args: --debug --only-verified

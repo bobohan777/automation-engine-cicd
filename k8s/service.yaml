@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: automation-engine-service
+  namespace: automation-engine
+  labels:
+    app: automation-engine
+    component: backend
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+spec:
+  type: LoadBalancer
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+    protocol: TCP
+  selector:
+    app: automation-engine
+  sessionAffinity: None

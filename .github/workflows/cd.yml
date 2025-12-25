@@ -1,0 +1,162 @@
+name: 🚀 CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*.*.*' ]
+  workflow_run:
+    workflows: ["🔄 CI Pipeline"]
+    types: [completed]
+    branches: [ main ]
+
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: automation-engine
+
+jobs:
+  deploy:
+    name: 🚀 Deploy
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'push' }}
+    
+    steps:
+    - name: 📥 Checkout Code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: 🐳 Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: 🔑 Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+        
+    - name: 📝 Extract Metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+          
+    - name: 🔨 Build and Push Docker Image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        build-args: |
+          GITHUB_SHA=${{ github.sha }}
+          GITHUB_REF_NAME=${{ github.ref_name }}
+          GITHUB_RUN_NUMBER=${{ github.run_number }}
+          
+    - name: 🔍 Verify Pushed Image
+      run: |
+        echo "::group::Image Verification"
+        docker pull ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+        docker run --rm ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:latest python -c "
+        import app.main
+        print('✅ Image verification successful')
+        "
+        echo "::endgroup::"
+
+  update-manifests:
+    name: 📝 Update K8s Manifests
+    runs-on: ubuntu-latest
+    needs: deploy
+    
+    steps:
+    - name: 📥 Checkout Code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: 🔧 Configure Git
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+    - name: 📝 Update Deployment Manifest
+      run: |
+        echo "::group::Update Kubernetes Manifests"
+        
+        # Update image tag in deployment.yaml
+        sed -i "s|image: .*automation-engine.*|image: ${{ secrets.DOCKER_USERNAME }}/automation-engine:${{ github.sha }}|g" k8s/deployment.yaml
+        
+        # Update labels with commit info
+        sed -i "s|commit-sha: .*|commit-sha: ${{ github.sha }}|g" k8s/deployment.yaml
+        sed -i "s|build-number: .*|build-number: \"${{ github.run_number }}\"|g" k8s/deployment.yaml
+        
+        echo "Updated deployment.yaml:"
+        cat k8s/deployment.yaml
+        echo "::endgroup::"
+        
+    - name: 💾 Commit and Push Changes
+      run: |
+        echo "::group::Commit Manifest Updates"
+        
+        git add k8s/deployment.yaml
+        
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+        else
+          git commit -m "🚀 Update deployment image to ${{ github.sha }}
+          
+          - Image: ${{ secrets.DOCKER_USERNAME }}/automation-engine:${{ github.sha }}
+          - Build: ${{ github.run_number }}
+          - Branch: ${{ github.ref_name }}
+          
+          Auto-updated by CD pipeline"
+          
+          git push
+          echo "✅ Manifests updated successfully"
+        fi
+        echo "::endgroup::"
+
+  notify:
+    name: 📢 Deployment Notification
+    runs-on: ubuntu-latest
+    needs: [deploy, update-manifests]
+    if: always()
+    
+    steps:
+    - name: 📊 Deployment Summary
+      run: |
+        echo "## 🚀 CD Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Docker Build & Push | ${{ needs.deploy.result == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Manifest Update | ${{ needs.update-manifests.result == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**🐳 Docker Image:** \`${{ secrets.DOCKER_USERNAME }}/automation-engine:${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "**📦 Registry:** [Docker Hub](https://hub.docker.com/r/${{ secrets.DOCKER_USERNAME }}/automation-engine)" >> $GITHUB_STEP_SUMMARY
+        echo "**🔗 Commit:** [\`${{ github.sha }}\`](https://github.com/${{ github.repository }}/commit/${{ github.sha }})" >> $GITHUB_STEP_SUMMARY
+        echo "**🌿 Branch:** \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "**🏗️ Build:** \`${{ github.run_number }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🎯 Next Steps" >> $GITHUB_STEP_SUMMARY
+        echo "1. Verify image in Docker Hub" >> $GITHUB_STEP_SUMMARY
+        echo "2. Deploy to Kubernetes cluster using updated manifests" >> $GITHUB_STEP_SUMMARY
+        echo "3. Run integration tests" >> $GITHUB_STEP_SUMMARY
+        
+    - name: 🎉 Success Notification
+      if: ${{ needs.deploy.result == 'success' && needs.update-manifests.result == 'success' }}
+      run: |
+        echo "🎉 Deployment completed successfully!"
+        echo "✅ Docker image pushed to registry"
+        echo "✅ Kubernetes manifests updated"
+        echo "🚀 Ready for production deployment"
