@@ -4,7 +4,6 @@ Unit tests for utility functions
 
 from datetime import datetime, timedelta
 
-
 from app.utils import calculate_uptime, format_response, sanitize_string, validate_input
 
 
