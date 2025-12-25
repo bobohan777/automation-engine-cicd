@@ -9,6 +9,9 @@ on:
     types: [completed]
     branches: [ main ]
 
+permissions:
+  contents: write
+
 env:
   REGISTRY: docker.io
   IMAGE_NAME: automation-engine
