@@ -16,4 +16,5 @@ isort==5.13.2
 flake8==6.1.0
 
 # Security
-bandit==1.7.5
+bandit==1.7.9
+pbr==6.0.0
