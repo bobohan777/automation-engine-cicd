@@ -82,7 +82,7 @@ jobs:
           echo "::endgroup::"
 
       - name: 📊 Upload Trivy Results
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
           sarif_file: "trivy-results.sarif"
@@ -100,7 +100,4 @@ jobs:
       - name: 🔍 TruffleHog Secrets Scan
         uses: trufflesecurity/trufflehog@main
         with:
-          path: ./
-          base: main
-          head: HEAD
-          extra_args: --debug --only-verified
+          extra_args: --debug --only-verified filesystem .

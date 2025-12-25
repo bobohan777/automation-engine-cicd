@@ -10,54 +10,54 @@ from app.main import app
 @pytest.fixture
 def client():
     """Create test client"""
-    app.config['TESTING'] = True
+    app.config["TESTING"] = True
     with app.test_client() as client:
         yield client
 
 
 def test_home_endpoint(client):
     """Test home endpoint"""
-    response = client.get('/')
+    response = client.get("/")
     assert response.status_code == 200
-    
+
     data = json.loads(response.data)
-    assert data['success'] is True
-    assert 'Automation Engine' in data['data']['service']
+    assert data["success"] is True
+    assert "Automation Engine" in data["data"]["service"]
 
 
 def test_health_check(client):
     """Test health check endpoint"""
-    response = client.get('/health')
+    response = client.get("/health")
     assert response.status_code == 200
-    
+
     data = json.loads(response.data)
-    assert data['success'] is True
-    assert data['data']['status'] == 'healthy'
+    assert data["success"] is True
+    assert data["data"]["status"] == "healthy"
 
 
 def test_echo_endpoint_valid_data(client):
     """Test echo endpoint with valid data"""
-    test_data = {'message': 'Hello CI/CD Pipeline'}
-    
-    response = client.post('/api/echo',
-                          data=json.dumps(test_data),
-                          content_type='application/json')
-    
+    test_data = {"message": "Hello CI/CD Pipeline"}
+
+    response = client.post(
+        "/api/echo", data=json.dumps(test_data), content_type="application/json"
+    )
+
     assert response.status_code == 200
     data = json.loads(response.data)
-    assert data['success'] is True
-    assert data['data']['echo'] == test_data
+    assert data["success"] is True
+    assert data["data"]["echo"] == test_data
 
 
 def test_echo_endpoint_invalid_data(client):
     """Test echo endpoint with invalid data"""
-    response = client.post('/api/echo',
-                          data=json.dumps({}),
-                          content_type='application/json')
-    
+    response = client.post(
+        "/api/echo", data=json.dumps({}), content_type="application/json"
+    )
+
     assert response.status_code == 400
     data = json.loads(response.data)
-    assert data['success'] is False
+    assert data["success"] is False
 
 
 def test_pipeline_info_endpoint(client):
